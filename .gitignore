@@ -1,0 +1,26 @@
+#Конфиденциальные данные
+*.db
+
+# Папки и файлы сборки
+target/
+*.jar
+*.war
+*.class
+
+# Настройки IDE
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+*.iws
+
+# Локальные конфигурации
+*.log
+local.properties
+application-local.properties
+.env
+
+# ОС
+.DS_Store
+Thumbs.db
