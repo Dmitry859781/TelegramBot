@@ -1,4 +1,3 @@
-// src/test/java/bot/commands/AuthorCommandTest.java
 package bot.commands;
 
 import bot.TelegramBot;
