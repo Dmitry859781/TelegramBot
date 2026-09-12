@@ -12,12 +12,10 @@ import java.util.List;
 
 public class ShowNoteCommand implements Command {
 
-    private final NoteService noteService;
-    private final BotFSM fsm;
+	private final NoteService noteService = NoteService.getInstance();
+	private final BotFSM fsm = BotFSM.getInstance();
 
-    public ShowNoteCommand(NoteService noteService, BotFSM fsm) {
-        this.noteService = noteService;
-        this.fsm = fsm;
+    public ShowNoteCommand() {
     }
 
     @Override
@@ -56,7 +54,8 @@ public class ShowNoteCommand implements Command {
 
             bot.sendMessage(chatId, "Введите имя заметки, которую хотите посмотреть.");
 
-            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_SHOW);
+            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_TO_SHOW);
+            fsm.setTempData(userId, "command", "showNote");
         } catch (SQLException e) {
             e.printStackTrace();
             bot.sendMessage(chatId, "Не удалось вывести список заметок. Попробуйте позже.");

@@ -29,7 +29,7 @@ public class HelpCommand implements Command {
     @Override
     public void execute(TelegramBot bot, Message message, String[] args) {
         StringBuilder response = new StringBuilder();
-
+        
         if (args.length > 0 && !args[0].isEmpty()) {
             // Запрос помощи по конкретной команде
             Command cmd = commandRegistry.get(args[0]);

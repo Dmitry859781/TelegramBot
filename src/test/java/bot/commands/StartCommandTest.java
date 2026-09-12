@@ -1,91 +1,104 @@
 package bot.commands;
 
-import bot.TelegramBot;
+import bot.AbstractBotTest;
+import bot.timezone.UserTimezoneService;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.objects.Message;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
+import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-class StartCommandTest {
-
-    @Mock
-    private TelegramBot mockBot;
-
-    @Mock
-    private Message mockMessage;
+class StartCommandTest extends AbstractBotTest {
 
     private Map<String, Command> commandRegistry;
     private StartCommand startCommand;
 
+    @Mock
+    private UserTimezoneService timezoneService;
+
     @BeforeEach
     void setUp() {
-        // Создаём реальный registry с командами для тестирования
-        commandRegistry = Map.of(
-                "start", new StartCommand(Map.of()),
-                "help", new HelpCommand(Map.of()),
-                "about", new AboutCommand(),
-                "author", new AuthorCommand()
-        );
-        // Пересоздаём StartCommand с полным registry
-        startCommand = new StartCommand(commandRegistry);
+        commandRegistry = new LinkedHashMap<>();
+        commandRegistry.put("start", new StartCommand(Map.of()));
+        commandRegistry.put("help", new HelpCommand(Map.of()));
+        commandRegistry.put("about", new AboutCommand());
+        commandRegistry.put("author", new AuthorCommand());
     }
 
     @Test
-    @DisplayName("Тест execute: отправляет список команд")
-    void testExecuteSendsListOfCommands() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
+    @DisplayName("Тест execute: часовая зона не установлена")
+    void testExecute_TimezoneNotSet() throws SQLException {
+        when(timezoneService.getTimezone(userId)).thenReturn(null);
 
-        // When
-        startCommand.execute(mockBot, mockMessage, new String[]{});
+        try (MockedStatic<UserTimezoneService> mockedTz = Mockito.mockStatic(UserTimezoneService.class)) {
+            mockedTz.when(UserTimezoneService::getInstance).thenReturn(timezoneService);
+            startCommand = new StartCommand(commandRegistry);
+            
+            // When
+            startCommand.execute(bot, message, new String[]{});
 
-        // Then
-        verify(mockBot).sendMessage(eq(123L), anyString());
+            // Then
+            verify(bot).sendMessage(eq(chatId), eq("У вас не установлена временная зона, используйте команду /setOrEditTimezone для установки."));
+        }
     }
 
     @Test
-    @DisplayName("Тест execute: отправляет корректный текст списка команд")
-    void testExecuteSendsCorrectCommandList() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
+    @DisplayName("Тест execute: часовая зона установлена, отправляет список команд")
+    void testExecute_TimezoneSet_SendsCommandList() throws SQLException {
+        when(timezoneService.getTimezone(userId)).thenReturn(3);
 
-        // When
-        startCommand.execute(mockBot, mockMessage, new String[]{});
+        try (MockedStatic<UserTimezoneService> mockedTz = Mockito.mockStatic(UserTimezoneService.class)) {
+            mockedTz.when(UserTimezoneService::getInstance).thenReturn(timezoneService);
+            startCommand = new StartCommand(commandRegistry);
 
-        // Then
-        verify(mockBot).sendMessage(eq(123L), eq("Доступные команды:\n<code>/start</code> - Показать список команд\n<code>/help</code> - Показать помощь по командам\n<code>/about</code> - Информация о боте\n<code>/author</code> - Информация об авторе\n"));
+            // When
+            startCommand.execute(bot, message, new String[]{});
+
+            // Then
+            String expectedText = "Доступные команды:\n"
+                    + "/start — Показать список команд\n"
+                    + "/help — Показать помощь по командам\n"
+                    + "/about — Показать информацию о боте\n"
+                    + "/author — Показать информацию об авторе\n";
+            
+            verify(bot).sendMessage(eq(chatId), eq(expectedText));
+        }
     }
 
     @Test
-    @DisplayName("Тест execute: не использует аргументы")
-    void testExecuteIgnoresArguments() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
+    @DisplayName("Тест execute: ошибка базы данных при проверке зоны")
+    void testExecute_DatabaseError() throws SQLException {
+        when(timezoneService.getTimezone(userId)).thenThrow(new SQLException("DB error"));
 
-        // When
-        startCommand.execute(mockBot, mockMessage, new String[]{"some", "arguments"});
+        try (MockedStatic<UserTimezoneService> mockedTz = Mockito.mockStatic(UserTimezoneService.class)) {
+            mockedTz.when(UserTimezoneService::getInstance).thenReturn(timezoneService);
+            startCommand = new StartCommand(commandRegistry);
 
-        // Then
-        verify(mockBot).sendMessage(eq(123L), eq("Доступные команды:\n<code>/start</code> - Показать список команд\n<code>/help</code> - Показать помощь по командам\n<code>/about</code> - Информация о боте\n<code>/author</code> - Информация об авторе\n"));
+            // When
+            startCommand.execute(bot, message, new String[]{});
+
+            // Then
+            verify(bot).sendMessage(eq(chatId), eq("Ошибка при проверке настроек. Попробуйте позже."));
+        }
     }
 
     @Test
     @DisplayName("Тест геттеров")
     void testGetters() {
-        // Then
-        assert "start".equals(startCommand.getCommandName());
-        assert "Показать список команд".equals(startCommand.getDescription());
-        assert "/start".equals(startCommand.getUsage());
+    	startCommand = new StartCommand(commandRegistry);
+    	
+        assertEquals("start", startCommand.getCommandName());
+        assertEquals("Показать список команд", startCommand.getDescription());
+        assertEquals("/start", startCommand.getUsage());
     }
 }

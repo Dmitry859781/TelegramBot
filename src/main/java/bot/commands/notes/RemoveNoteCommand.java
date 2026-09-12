@@ -6,18 +6,14 @@ import bot.fsm.BotFSM;
 import bot.fsm.UserState;
 import bot.note.NoteService;
 import org.telegram.telegrambots.meta.api.objects.Message;
-
-import java.sql.SQLException;
 import java.util.List;
 
 public class RemoveNoteCommand implements Command {
 
-    private final NoteService noteService;
-    private final BotFSM fsm;
+	private final NoteService noteService = NoteService.getInstance();
+	private final BotFSM fsm = BotFSM.getInstance();
 
-    public RemoveNoteCommand(NoteService noteService, BotFSM fsm) {
-        this.noteService = noteService;
-        this.fsm = fsm;
+    public RemoveNoteCommand() {
     }
 
     @Override
@@ -56,7 +52,8 @@ public class RemoveNoteCommand implements Command {
 
             bot.sendMessage(chatId, "Введите имя заметки, которую хотите удалить.");
 
-            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_REMOVE);
+            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_TO_REMOVE);
+            fsm.setTempData(userId, "command", "removeNote");
         } catch (Exception e) {
             bot.sendMessage(chatId, "Не удалось вывести список заметок. Попробуйте позже.");
         }

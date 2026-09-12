@@ -1,22 +1,18 @@
 package bot;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-import bot.commands.AboutCommand;
-import bot.commands.AuthorCommand;
-import bot.commands.Command;
-import bot.commands.HelpCommand;
-import bot.commands.StartCommand;
+import bot.commands.*;
 import bot.commands.notes.*;
+import bot.commands.reminders.*;
+import bot.commands.timezone.SetOrEditTimezoneCommand;
 import bot.fsm.BotFSM;
-import bot.note.NoteService;
 
 public class CommandRegistry {
 
-    private final Map<String, Command> commands = new HashMap<>();
-    private final NoteService noteService = NoteService.INSTANCE;
+    private final Map<String, Command> commands = new LinkedHashMap<>();
     private final BotFSM fsm = BotFSM.INSTANCE;
     
     public CommandRegistry() {
@@ -28,11 +24,18 @@ public class CommandRegistry {
         commands.put("start", new StartCommand(commands));
         commands.put("about", new AboutCommand());
         commands.put("author", new AuthorCommand());
-        commands.put("addnote", new AddNoteCommand(noteService, fsm));
-        commands.put("addNote", new AddNoteCommand(noteService, fsm));
-        commands.put("editNote", new EditNoteCommand(noteService, fsm));
-        commands.put("showNote", new ShowNoteCommand(noteService, fsm));
-        commands.put("removeNote", new RemoveNoteCommand(noteService, fsm));
+        commands.put("cancel", new CancelCommand(fsm));
+        commands.put("addNote", new AddNoteCommand());
+        commands.put("editNote", new EditNoteCommand());
+        commands.put("showNote", new ShowNoteCommand());
+        commands.put("removeNote", new RemoveNoteCommand());
+        commands.put("addOnceReminder", new AddOnceReminderCommand());
+        commands.put("addRecurringReminder", new AddRecurringReminderCommand());
+        commands.put("editOnceReminder", new EditOnceReminderCommand());
+        commands.put("editRecurringReminder", new EditRecurringReminderCommand());
+        commands.put("removeReminder", new RemoveReminderCommand());
+        commands.put("showReminder", new ShowReminderCommand());
+        commands.put("setOrEditTimezone", new SetOrEditTimezoneCommand());
     }
 
     public void registerCommand(String name, Command command) {

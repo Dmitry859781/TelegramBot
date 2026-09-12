@@ -1,51 +1,34 @@
 package bot.commands;
 
-import bot.TelegramBot;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.objects.Message;
 
+import bot.AbstractBotTest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-class AuthorCommandTest {
+class AuthorCommandTest extends AbstractBotTest {
 
-    @Mock
-    private TelegramBot mockBot;
-
-    @Mock
-    private Message mockMessage;
-
-    private AuthorCommand authorCommand;
-
-    @BeforeEach
-    void setUp() {
-        authorCommand = new AuthorCommand();
-    }
+    private final AuthorCommand authorCommand = new AuthorCommand();
 
     @Test
+    @DisplayName("Тест execute: отправляет сообщение с информацией об авторе")
     void testExecute_ShouldSendMessageWithAuthorInfo() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
-
         // When
-        authorCommand.execute(mockBot, mockMessage, new String[]{});
+        authorCommand.execute(bot, message, new String[]{});
 
         // Then
-        verify(mockBot).sendMessage(eq(123L), anyString());
+        verify(bot).sendMessage(eq(chatId), anyString());
     }
 
     @Test
+    @DisplayName("Тест геттеров")
     void testGetters() {
-        // Then
-        assert "author".equals(authorCommand.getCommandName());
-        assert "Показать информацию об авторе".equals(authorCommand.getDescription());
-        assert "/author".equals(authorCommand.getUsage());
+        assertEquals("author", authorCommand.getCommandName());
+        assertEquals("Показать информацию об авторе", authorCommand.getDescription());
+        assertEquals("/author", authorCommand.getUsage());
     }
 }

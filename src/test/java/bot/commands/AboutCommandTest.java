@@ -1,51 +1,34 @@
 package bot.commands;
 
-import bot.TelegramBot;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.objects.Message;
 
+import bot.AbstractBotTest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
-@ExtendWith(MockitoExtension.class)
-class AboutCommandTest {
+class AboutCommandTest extends AbstractBotTest {
 
-    @Mock
-    private TelegramBot mockBot;
-
-    @Mock
-    private Message mockMessage;
-
-    private AboutCommand aboutCommand;
-
-    @BeforeEach
-    void setUp() {
-        aboutCommand = new AboutCommand();
-    }
+    private final AboutCommand aboutCommand = new AboutCommand();
 
     @Test
+    @DisplayName("Тест execute: отправляет сообщение с информацией о боте")
     void testExecute_ShouldSendMessageWithInfo() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
-
         // When
-        aboutCommand.execute(mockBot, mockMessage, new String[]{});
+        aboutCommand.execute(bot, message, new String[]{});
 
         // Then
-        verify(mockBot).sendMessage(eq(123L), anyString());
+        verify(bot).sendMessage(eq(chatId), anyString());
     }
 
     @Test
+    @DisplayName("Тест геттеров")
     void testGetters() {
-        // Then
-        assert "about".equals(aboutCommand.getCommandName());
-        assert "Показать информацию о боте".equals(aboutCommand.getDescription());
-        assert "/about".equals(aboutCommand.getUsage());
+        assertEquals("about", aboutCommand.getCommandName());
+        assertEquals("Показать информацию о боте", aboutCommand.getDescription());
+        assertEquals("/about", aboutCommand.getUsage());
     }
 }

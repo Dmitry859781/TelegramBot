@@ -1,62 +1,50 @@
 package bot.commands.notes;
 
-import bot.TelegramBot;
+import bot.AbstractBotTest;
 import bot.fsm.BotFSM;
 import bot.fsm.UserState;
 import bot.note.NoteService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.api.objects.User;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 
-@ExtendWith(MockitoExtension.class)
-class AddNoteCommandTest {
+class AddNoteCommandTest extends AbstractBotTest {
 
     @Mock
     private NoteService noteService;
 
-    @Mock
-    private BotFSM fsm;
-
-    @Mock
-    private TelegramBot bot;
-
-    @Mock
-    private Message message;
-
-    @Mock
-    private User mockUser;
-
-    private AddNoteCommand addNoteCommand;
-
-    @BeforeEach
-    void setUp() {
-        // Внедряем mock-объекты в конструктор команды
-        addNoteCommand = new AddNoteCommand(noteService, fsm);
-    }
-
     @Test
     @DisplayName("Тест execute: отправляет сообщение и устанавливает состояние")
     void testExecuteSendsMessageAndSetsState() {
-        // Given
-        Long userId = 12345L;
-        Long chatId = 67890L;
+        try (MockedStatic<BotFSM> mockedFsm = Mockito.mockStatic(BotFSM.class);
+             MockedStatic<NoteService> mockedNoteService = Mockito.mockStatic(NoteService.class)) {
 
-        when(mockUser.getId()).thenReturn(userId);
-        when(message.getFrom()).thenReturn(mockUser);
-        when(message.getChatId()).thenReturn(chatId);
+            mockedFsm.when(BotFSM::getInstance).thenReturn(fsm);
+            mockedNoteService.when(NoteService::getInstance).thenReturn(noteService);
 
-        // When
-        addNoteCommand.execute(bot, message, new String[]{});
+            AddNoteCommand command = new AddNoteCommand();
 
-        // Then
-        verify(bot).sendMessage(eq(chatId), eq("Введите имя добавляемой заметки."));
-        verify(fsm).setState(eq(userId), eq(UserState.AWAITING_NOTE_NAME_ADD));
+            // When
+            command.execute(bot, message, new String[]{});
+
+            // Then
+            verify(bot).sendMessage(chatId, "Введите имя добавляемой заметки.");
+            verify(fsm).setState(userId, UserState.AWAITING_NOTE_NAME_TO_ADD);
+        }
+    }
+
+    @Test
+    @DisplayName("Тест геттеров")
+    void testGetters() {
+        AddNoteCommand command = new AddNoteCommand();
+
+        assertEquals("addNote", command.getCommandName());
+        assertEquals("Добавить заметку", command.getDescription());
+        assertEquals("/addNote", command.getUsage());
     }
 }

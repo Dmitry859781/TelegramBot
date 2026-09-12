@@ -1,27 +1,19 @@
 package bot.commands;
 
-import bot.TelegramBot;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.objects.Message;
+
+import bot.AbstractBotTest;
 
 import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
 
-@ExtendWith(MockitoExtension.class)
-class HelpCommandTest {
-
-    @Mock
-    private TelegramBot mockBot;
-
-    @Mock
-    private Message mockMessage;
+class HelpCommandTest extends AbstractBotTest {
 
     private Map<String, Command> commandRegistry;
     private HelpCommand helpCommand;
@@ -30,7 +22,7 @@ class HelpCommandTest {
     void setUp() {
         // Создаём реальный registry с командами для тестирования
         commandRegistry = Map.of(
-                "help", new HelpCommand(Map.of()), // важно: передаём пустой, т.к. HelpCommand сам добавляется
+                "help", new HelpCommand(Map.of()),
                 "about", new AboutCommand(),
                 "author", new AuthorCommand()
         );
@@ -39,46 +31,40 @@ class HelpCommandTest {
     }
 
     @Test
+    @DisplayName("Тест execute: без аргументов возвращает список всех команд")
     void testExecute_WithoutArgs_ShouldReturnAllCommands() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
-
         // When
-        helpCommand.execute(mockBot, mockMessage, new String[]{});
+        helpCommand.execute(bot, message, new String[]{});
 
         // Then
-        verify(mockBot).sendMessage(eq(123L), anyString());
+        verify(bot).sendMessage(eq(chatId), anyString());
     }
 
     @Test
+    @DisplayName("Тест execute: с валидным аргументом возвращает помощь по конкретной команде")
     void testExecute_WithValidCommandArg_ShouldReturnSpecificCommandHelp() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
-
         // When
-        helpCommand.execute(mockBot, mockMessage, new String[]{"about"});
+        helpCommand.execute(bot, message, new String[]{"about"});
 
         // Then
-        verify(mockBot).sendMessage(anyLong(), anyString());
+        verify(bot).sendMessage(eq(chatId), anyString());
     }
 
     @Test
+    @DisplayName("Тест execute: с невалидным аргументом возвращает сообщение об ошибке")
     void testExecute_WithInvalidCommandArg_ShouldReturnNotFoundMessage() {
-        // Given
-        when(mockMessage.getChatId()).thenReturn(123L);
-
         // When
-        helpCommand.execute(mockBot, mockMessage, new String[]{"nonexistent"});
+        helpCommand.execute(bot, message, new String[]{"nonexistent"});
 
         // Then
-        verify(mockBot).sendMessage(anyLong(), eq("Команда 'nonexistent' не найдена."));
+        verify(bot).sendMessage(eq(chatId), eq("Команда 'nonexistent' не найдена."));
     }
 
     @Test
+    @DisplayName("Тест геттеров")
     void testGetters() {
-        // Then
-        assert "help".equals(helpCommand.getCommandName());
-        assert "Показать помощь по командам".equals(helpCommand.getDescription());
-        assert "/help [команда]".equals(helpCommand.getUsage());
+        assertEquals("help", helpCommand.getCommandName());
+        assertEquals("Показать помощь по командам", helpCommand.getDescription());
+        assertEquals("/help [команда]", helpCommand.getUsage());
     }
 }

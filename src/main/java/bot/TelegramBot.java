@@ -3,13 +3,16 @@ package bot;
 import bot.commands.Command;
 import bot.fsm.BotFSM;
 import bot.fsm.UserState;
-import bot.note.NoteService;
-
-import java.sql.SQLException;
-import java.util.HashMap;
+import bot.handlers.notes.*;
+import bot.handlers.reminders.*;
+import bot.handlers.timezone.*;
+import bot.reminder.Reminder;
+import bot.reminder.ReminderService;
+import bot.reminder.ReminderType;
 import java.util.List;
-import java.util.Map;
-
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -17,234 +20,206 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 public class TelegramBot extends TelegramLongPollingBot {
 
-    private final String botToken = System.getenv("TELEGRAM_BOT_TOKEN");
-    private final CommandRegistry commandRegistry;
-    private final NoteService noteService = NoteService.INSTANCE;
-    private final BotFSM fsm = BotFSM.INSTANCE;
+	private final String botToken = System.getenv("TELEGRAM_BOT_TOKEN");
+	private final CommandRegistry commandRegistry;
+	private final ReminderService reminderService = ReminderService.INSTANCE;
+	private final BotFSM fsm = BotFSM.INSTANCE;
 
-    public TelegramBot(CommandRegistry registry) {
-        this.commandRegistry = registry;
-    }
+	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    @Override
-    public String getBotUsername() {
-        return "Unterrichtung_bot";
-    }
+	private static final HandleAwaitingNoteNameToAdd handleAwaitingNoteNameToAdd = new HandleAwaitingNoteNameToAdd();
+	private static final HandleAwaitingNoteText handleAwaitingNoteText = new HandleAwaitingNoteText();
+	private static final HandleAwaitingNoteNameToEdit handleAwaitingNoteNameToEdit = new HandleAwaitingNoteNameToEdit();
+	private static final HandleAwaitingNoteNewName handleAwaitingNoteNewName = new HandleAwaitingNoteNewName();
+	private static final HandleAwaitingNoteNewText handleAwaitingNoteNewText = new HandleAwaitingNoteNewText();
+	private static final HandleAwaitingNoteNameToShow handleAwaitingNoteNameToShow = new HandleAwaitingNoteNameToShow();
+	private static final HandleAwaitingNoteNameToRemove handleAwaitingNoteNameToRemove = new HandleAwaitingNoteNameToRemove();
+	private static final HandleAwaitingReminderNameToAdd handleAwaitingReminderNameToAdd = new HandleAwaitingReminderNameToAdd();
+	private static final HandleAwaitingOnceDate handleAwaitingOnceDate = new HandleAwaitingOnceDate();
+	private static final HandleAwaitingRecurringDays handleAwaitingRecurringDays = new HandleAwaitingRecurringDays();
+	private static final HandleAwaitingReminderNameToEdit handleAwaitingReminderNameToEdit = new HandleAwaitingReminderNameToEdit();
+	private static final HandleAwaitingReminderNewName handleAwaitingReminderNewName = new HandleAwaitingReminderNewName();
+	private static final HandleAwaitingReminderNewTime handleAwaitingReminderNewTime = new HandleAwaitingReminderNewTime();
+	private static final HandleAwaitingReminderNameToRemove handleAwaitingReminderNameToRemove = new HandleAwaitingReminderNameToRemove();
+	private static final HandleAwaitingReminderNameToShow handleAwaitingReminderNameToShow = new HandleAwaitingReminderNameToShow();
+	private static final HandleAwaitingTimezoneOffset handleAwaitingTimezoneOffset = new HandleAwaitingTimezoneOffset();
 
-    @Override
-    public String getBotToken() {
-        return botToken;
-    }
+	public TelegramBot(CommandRegistry registry) {
+		this.commandRegistry = registry;
+		// Ежеминутная проверка напоминаний
+		scheduler.scheduleAtFixedRate(this::checkAndSendReminders, 0, 1, TimeUnit.MINUTES);
+	}
 
-    @Override
-    public void onUpdateReceived(Update update) {
-        if (!update.hasMessage()) return;
+	@Override
+	public String getBotUsername() {
+		return "Unterrichtung_bot";
+	}
 
-        Message message = update.getMessage();
-        Long userId = message.getFrom().getId();
-        Long chatId = message.getChatId();
+	@Override
+	public String getBotToken() {
+		return botToken;
+	}
 
-        if (!message.hasText()) {
-            return; // Игнорируем не-текстовые сообщения
-        }
+	@Override
+	public void onUpdateReceived(Update update) {
+		if (!update.hasMessage())
+			return;
 
-        String text = message.getText().trim();
+		Message message = update.getMessage();
+		Long userId = message.getFrom().getId();
+		Long chatId = message.getChatId();
 
-        // "/cancel"
-        if (text.equals("/cancel")) {
-            fsm.resetState(userId); // Сбрасываем в DEFAULT
-            sendMessage(chatId, "Операция отменена. Вы возвращены в главное меню.");
-            return;
-        }
+		if (!message.hasText()) {
+			return; // Игнорируем не-текстовые сообщения
+		}
 
-        // Получаем текущее состояние пользователя
-        UserState state = fsm.getState(userId);
+		String text = message.getText().trim();
 
-        // Обрабатываем ввод в зависимости от состояния
-        switch (state) {
-            case DEFAULT:
-                handleDefaultState(chatId, text, message);
-                break;
-            case AWAITING_NOTE_NAME_ADD:
-                handleAwaitingNoteNameAdd(userId, chatId, text);
-                break;
-            case AWAITING_NOTE_TEXT_ADD:
-                handleAwaitingNoteTextAdd(userId, chatId, text);
-                break;
-            case AWAITING_NOTE_NAME_EDIT:
-                handleAwaitingNoteNameEdit(userId, chatId, text);
-                break;
-            case AWAITING_NOTE_TEXT_EDIT:
-                handleAwaitingNoteTextEdit(userId, chatId, text);
-                break;
-            case AWAITING_NOTE_NAME_SHOW:
-                handleAwaitingNoteNameShow(userId, chatId, text);
-                break;
-            case AWAITING_NOTE_NAME_REMOVE:
-                handleAwaitingNoteNameRemove(userId, chatId, text);
-                break;
-        }
-    }
-    
-    private void handleDefaultState(Long chatId, String text, Message message) {
-        if (text.startsWith("/")) {
-            String[] parts = text.split("\\s+", 2);
-            String cmdName = parts[0].substring(1); // убираем "/"
-            String[] args = parts.length > 1 ? parts[1].split("\\s+") : new String[0];
+		// "/cancel"
+		if (text.equals("/cancel")) {
+			Command cancelCommand = commandRegistry.getCommand("cancel");
+			if (cancelCommand != null) {
+				cancelCommand.execute(this, message, new String[0]);
+			}
+			return;
+		}
 
-            Command command = commandRegistry.getCommand(cmdName);
-            if (command != null) {
-                command.execute(this, message, args);
-            }  
-            else {
-                sendMessage(chatId, "Неизвестная команда. Введите /help для списка команд.");
-            }
-        } else {
-            sendMessage(chatId, "Введите команду, например, /help.");
-        }
-    }
-    // --- FSM ---
+		// Получаем текущее состояние пользователя
+		UserState state = fsm.getState(userId);
 
-    private void handleAwaitingNoteNameAdd(Long userId, Long chatId, String text) {
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Имя заметки не может быть пустым. Попробуйте снова: /addNote");
-            fsm.resetState(userId);
-            return;
-        }
+		// Обрабатываем ввод в зависимости от состояния
+		switch (state) {
+		case DEFAULT:
+			handleDefaultState(chatId, text, message);
+			break;
+		// Notes
+		case AWAITING_NOTE_NAME_TO_ADD:
+			handleAwaitingNoteNameToAdd.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_TEXT:
+			handleAwaitingNoteText.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_NAME_TO_EDIT:
+			handleAwaitingNoteNameToEdit.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_NEW_NAME:
+			handleAwaitingNoteNewName.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_NEW_TEXT:
+			handleAwaitingNoteNewText.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_NAME_TO_SHOW:
+			handleAwaitingNoteNameToShow.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_NOTE_NAME_TO_REMOVE:
+			handleAwaitingNoteNameToRemove.handle(userId, chatId, text, this);
+			break;
+		// Reminders
+		case AWAITING_REMINDER_NAME_TO_ADD:
+			handleAwaitingReminderNameToAdd.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_ONCE_DATE:
+			handleAwaitingOnceDate.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_RECURRING_DAYS:
+			handleAwaitingRecurringDays.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_REMINDER_NAME_TO_EDIT:
+			handleAwaitingReminderNameToEdit.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_REMINDER_NEW_NAME:
+			handleAwaitingReminderNewName.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_REMINDER_NEW_TIME:
+			handleAwaitingReminderNewTime.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_REMINDER_NAME_TO_REMOVE:
+			handleAwaitingReminderNameToRemove.handle(userId, chatId, text, this);
+			break;
+		case AWAITING_REMINDER_NAME_TO_SHOW:
+			handleAwaitingReminderNameToShow.handle(userId, chatId, text, this);
+			break;
+		// Timezone
+		case AWAITING_TIMEZONE_OFFSET:
+			handleAwaitingTimezoneOffset.handle(userId, chatId, text, this);
+			break;
+			
+		default:
+			break;
+		}
+	}
 
-        String cleanName = text.trim();
-        
-        // Проверяем, существует ли заметка с таким именем
-        try {
-            List<String> userNotes = noteService.getUserNotes(userId);
-            if (userNotes.contains(cleanName)) {
-                sendMessage(chatId, "Заметка с именем \"" + cleanName + "\" уже существует. Введите другое имя.");
-                // Не сбрасываем состояние, пользователь вводит имя снова
-                return;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            sendMessage(chatId, "Ошибка при проверке существования заметки. Попробуйте позже.");
-            fsm.resetState(userId);
-            return;
-        }
-        
-        sendMessage(chatId, "Введите текст для заметки \"" + cleanName + "\".");
-        fsm.setState(userId, UserState.AWAITING_NOTE_TEXT_ADD);
-        tempNoteNameStorage.put(userId, cleanName);
-    }
+	private void handleDefaultState(Long chatId, String text, Message message) {
+		if (text.startsWith("/")) {
+			String[] parts = text.split("\\s+", 2);
+			String cmdName = parts[0].substring(1); // убираем "/"
+			String[] args = parts.length > 1 ? parts[1].split("\\s+") : new String[0];
 
-    private void handleAwaitingNoteTextAdd(Long userId, Long chatId, String text) {
-        String noteName = tempNoteNameStorage.remove(userId);
+			Command command = commandRegistry.getCommand(cmdName);
+			if (command != null) {
+				command.execute(this, message, args);
+			} else {
+				sendMessage(chatId, "Неизвестная команда. Введите /help для списка команд.");
+			}
+		} else {
+			sendMessage(chatId, "Введите команду, например, /help.");
+		}
+	}
 
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Текст заметки не может быть пустым. Операция отменена.");
-            fsm.resetState(userId);
-            return;
-        }
+	// Вспомогательные команды
+	public void sendMessage(Long chatId, String text) {
+		org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = org.telegram.telegrambots.meta.api.methods.send.SendMessage
+				.builder().chatId(chatId.toString()).text(text).build();
+		try {
+			execute(msg);
+		} catch (TelegramApiException e) {
+			e.printStackTrace();
+		}
+	}
+	private void checkAndSendReminders() {
+		System.out.println("[" + java.time.LocalDateTime.now() + "] Запущен checkAndSend");
 
-        try {
-            noteService.addNoteToDB(userId, noteName, text.trim());
-            sendMessage(chatId, "Заметка \"" + noteName + "\" добавлена!");
-        } catch (Exception e) {
-            e.printStackTrace();
-            sendMessage(chatId, "Ошибка добавления заметки. Попробуйте позже.");
-        }
-        fsm.resetState(userId);
-    }
+		try {
+			List<Reminder> due = reminderService.getDueReminders();
+			System.out.println("Найдено напоминаний для отправки: " + due.size());
 
-    private void handleAwaitingNoteNameEdit(Long userId, Long chatId, String text) {
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Имя заметки не может быть пустым. Попробуйте снова: /editNote");
-            fsm.resetState(userId);
-            return;
-        }
+			for (Reminder reminder : due) {
+				String message = "Напоминание: " + reminder.getName();
 
-        String cleanName = text.trim();
-        sendMessage(chatId, "Введите отредактируемый текст для заметки \"" + cleanName + "\".");
-        fsm.setState(userId, UserState.AWAITING_NOTE_TEXT_EDIT);
-        tempNoteNameStorage.put(userId, cleanName);
-    }
+				try {
+					sendMessage(reminder.getUserId(), message);
+					System.out.println("Успешно отправлено пользователю " + reminder.getUserId());
+				} catch (Exception sendEx) {
+					System.err.println("Ошибка отправки сообщения пользователю " + reminder.getUserId() + ": "
+							+ sendEx.getMessage());
+				}
 
-    private void handleAwaitingNoteTextEdit(Long userId, Long chatId, String text) {
-        String noteName = tempNoteNameStorage.remove(userId);
+				// Если это разовое напоминание — удаляем его из базы
+				if (ReminderType.ONCE.equals(reminder.getType())) {
+					try {
+						reminderService.removeReminder(reminder.getUserId(), reminder.getName());
+						System.out.println("Разовое напоминание '" + reminder.getName() + "' удалено из базы.");
+					} catch (Exception removeEx) {
+						System.err.println("Ошибка удаления напоминания: " + removeEx.getMessage());
+					}
+				}
+			}
+		} catch (Throwable e) {
+			System.err.println("КРИТИЧЕСКАЯ ОШИБКА в потоке планировщика напоминаний:");
+			e.printStackTrace();
+		}
+	}
 
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Текст заметки не может быть пустым. Операция отменена.");
-            fsm.resetState(userId);
-            return;
-        }
-
-        try {
-            noteService.removeNoteFromDB(userId, noteName);
-            noteService.addNoteToDB(userId, noteName, text.trim());
-            sendMessage(chatId, "Заметка \"" + noteName + "\" успешно обновлена!");
-        } catch (Exception e) {
-            e.printStackTrace();
-            sendMessage(chatId, "Ошибка при редактировании заметки. Попробуйте позже.");
-        }
-        fsm.resetState(userId);
-    }
-
-    private void handleAwaitingNoteNameShow(Long userId, Long chatId, String text) {
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Имя заметки не может быть пустым. Попробуйте снова: /showNote");
-            fsm.resetState(userId);
-            return;
-        }
-
-        String cleanName = text.trim();
-        try {
-            String noteText = noteService.getNote(userId, cleanName);
-            if (noteText != null) {
-                sendMessage(chatId, cleanName + "\n" + noteText);
-            } else {
-                sendMessage(chatId, "Заметка \"" + cleanName + "\" не найдена.");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            sendMessage(chatId, "Не удалось получить заметку. Попробуйте позже.");
-        }
-        fsm.resetState(userId);
-    }
-
-    private void handleAwaitingNoteNameRemove(Long userId, Long chatId, String text) {
-        if (text == null || text.trim().isEmpty()) {
-            sendMessage(chatId, "Имя заметки не может быть пустым. Попробуйте снова: /removeNote");
-            fsm.resetState(userId);
-            return;
-        }
-
-        String cleanName = text.trim();
-
-        try {
-            String noteText = noteService.getNote(userId, cleanName);
-            if (noteText != null) {
-                noteService.removeNoteFromDB(userId, cleanName);
-                sendMessage(chatId, "Заметка \"" + cleanName + "\" удалена!");
-            } else {
-                sendMessage(chatId, "Заметка \"" + cleanName + "\" не найдена.");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            sendMessage(chatId, "Не удалось удалить заметку. Попробуйте позже.");
-        }
-        fsm.resetState(userId);
-    }
-    
-    // Временное хранилище для передачи данных между состояниями
-    private final Map<Long, String> tempNoteNameStorage = new HashMap<>();
-    
-    public void sendMessage(Long chatId, String text) {
-        org.telegram.telegrambots.meta.api.methods.send.SendMessage msg =
-                org.telegram.telegrambots.meta.api.methods.send.SendMessage.builder()
-                        .chatId(chatId.toString())
-                        .text(text)
-                        .build();
-        try {
-            execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
-    }
+	public void onDestroy() {
+		scheduler.shutdown();
+		try {
+			if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+				// если за 5 секунд планировщик не остановился, то принудительно останавливаем
+				scheduler.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			scheduler.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
+	}
 }

@@ -11,12 +11,10 @@ import java.util.List;
 
 public class EditNoteCommand implements Command {
 
-    private final NoteService noteService;
-    private final BotFSM fsm;
+	private final NoteService noteService = NoteService.getInstance();
+	private final BotFSM fsm = BotFSM.getInstance();
 
-    public EditNoteCommand(NoteService noteService, BotFSM fsm) {
-        this.noteService = noteService;
-        this.fsm = fsm;
+    public EditNoteCommand() {
     }
 
     @Override
@@ -55,7 +53,8 @@ public class EditNoteCommand implements Command {
 
             bot.sendMessage(chatId, "Введите имя редактируемой заметки.");
 
-            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_EDIT);
+            fsm.setState(userId, UserState.AWAITING_NOTE_NAME_TO_EDIT);
+            fsm.setTempData(userId, "command", "editNote");
         } catch (Exception e) {
             bot.sendMessage(chatId, "Не удалось вывести список заметок. Попробуйте позже.");
         }

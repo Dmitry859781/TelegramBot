@@ -8,8 +8,12 @@ import java.nio.file.*;
 public class NoteService {
 
     // Единственный экземпляр — Singleton
-    public static final NoteService INSTANCE = new NoteService("database/notes.db");
+    public static final NoteService INSTANCE = new NoteService("database/Notes.db");
 
+    public static NoteService getInstance() {
+        return INSTANCE;
+    }
+    
     private final String DB_URL;
 
     static {
@@ -19,8 +23,8 @@ public class NoteService {
             throw new RuntimeException("SQLite JDBC driver not found", e);
         }
     }
-
-    // Приватный конструктор
+    
+    // Конструктор
     private NoteService(String dbPath) {
         Path dbFilePath = Paths.get(dbPath);
         Path dbDir = dbFilePath.getParent();
@@ -57,7 +61,7 @@ public class NoteService {
         }
     }
 
-    // Добавление или обновление заметки по userId и noteName
+    // Добавление заметки
     public void addNoteToDB(Long userId, String noteName, String text) throws SQLException {
         String sql = "INSERT OR REPLACE INTO notes (user_id, note_name, text) VALUES (?, ?, ?)";
         try (Connection conn = DriverManager.getConnection(DB_URL);
@@ -65,6 +69,30 @@ public class NoteService {
             stmt.setLong(1, userId);
             stmt.setString(2, noteName);
             stmt.setString(3, text);
+            stmt.executeUpdate();
+        }
+    }
+    
+    // Обновление заметки
+    public void updateNote(Long userId, String oldName, String newName, String newText) throws SQLException {
+        // Сначала переименовываем
+        if (!oldName.equals(newName)) {
+            String renameSql = "UPDATE notes SET note_name = ? WHERE user_id = ? AND note_name = ?";
+            try (Connection conn = DriverManager.getConnection(DB_URL);
+                 PreparedStatement stmt = conn.prepareStatement(renameSql)) {
+                stmt.setString(1, newName);
+                stmt.setLong(2, userId);
+                stmt.setString(3, oldName);
+                stmt.executeUpdate();
+            }
+        }
+        // Затем обновляем текст
+        String updateTextSql = "UPDATE notes SET text = ? WHERE user_id = ? AND note_name = ?";
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement stmt = conn.prepareStatement(updateTextSql)) {
+            stmt.setString(1, newText);
+            stmt.setLong(2, userId);
+            stmt.setString(3, newName);
             stmt.executeUpdate();
         }
     }
@@ -110,12 +138,5 @@ public class NoteService {
             }
         }
         return noteNames;
-    }
-    
-    // Только для тестов!
- // Только для тестов!
-    public NoteService(String dbPath, boolean forTest) {
-        this.DB_URL = "jdbc:sqlite:" + dbPath;
-        initializeDatabase();
     }
 }

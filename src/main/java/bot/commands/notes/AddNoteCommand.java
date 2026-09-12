@@ -4,17 +4,13 @@ import bot.TelegramBot;
 import bot.commands.Command;
 import bot.fsm.BotFSM;
 import bot.fsm.UserState;
-import bot.note.NoteService;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 public class AddNoteCommand implements Command {
 
-    private final NoteService noteService;
-    private final BotFSM fsm;
+    private final BotFSM fsm = BotFSM.getInstance();
 
-    public AddNoteCommand(NoteService noteService, BotFSM fsm) {
-        this.noteService = noteService;
-        this.fsm = fsm;
+    public AddNoteCommand() {
     }
 
     @Override
@@ -37,6 +33,7 @@ public class AddNoteCommand implements Command {
         Long userId = message.getFrom().getId();
 
         bot.sendMessage(message.getChatId(), "Введите имя добавляемой заметки.");
-        fsm.setState(userId, UserState.AWAITING_NOTE_NAME_ADD);
+        fsm.setState(userId, UserState.AWAITING_NOTE_NAME_TO_ADD);
+        fsm.setTempData(userId, "command", "addNote");
     }
 }
