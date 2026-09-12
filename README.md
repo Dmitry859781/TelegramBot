@@ -14,13 +14,13 @@
 - `/editNote` — отредактировать существующую заметку.
 - `/showNote` — посмотреть содержимое заметки.
 - `/removeNote` — удалить заметку.
-- `AddOnceReminderCommand` — Добавить разовое напоминание.
-- `AddRecurringReminderCommand` — Добавить повторяющееся напоминание.
-- `EditOnceReminderCommand` — Редактировать разовое напоминание.
-- `EditRecurringReminderCommand` — Редактировать повторяющееся напоминание.
-- `RemoveReminderCommand` — Удалить напоминание.
-- `ShowReminderCommand` — Показать напоминание.
-- `SetOrEditTimezoneCommand` — Установить или изменить ваш часовой пояс.
+- `/AddOnceReminderCommand` — Добавить разовое напоминание.
+- `/AddRecurringReminderCommand` — Добавить повторяющееся напоминание.
+- `/EditOnceReminderCommand` — Редактировать разовое напоминание.
+- `/EditRecurringReminderCommand` — Редактировать повторяющееся напоминание.
+- `/RemoveReminderCommand` — Удалить напоминание.
+- `/ShowReminderCommand` — Показать напоминание.
+- `/SetOrEditTimezoneCommand` — Установить или изменить ваш часовой пояс.
 - `/cancel` — отменить текущую операцию и вернуться в главное меню.
 
 ---
